@@ -34,7 +34,9 @@
   .pill { display:inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
   .pos { background: #e3f5ec; color: #138a52; } .neg { background: #fde8e6; color: #c0392b; } .neu { background: #eef1f4; color: #5a6b7b; }
   .hl-head { font-weight:700; font-size:13px; margin-bottom:9px; } .hl-head.pos { color:#138a52; } .hl-head.neg { color:#c0392b; }
-  ul.hl { margin:0; padding-left:18px; } ul.hl li { margin:0 0 8px; font-size:13px; color:#42526b; }
+  ul.hl { margin:0; padding-left:18px; } ul.hl li { margin:0 0 10px; font-size:13px; color:#42526b; }
+  .hltoggle { color:#ff7a59; cursor:pointer; font-weight:600; text-decoration:none; } .hltoggle:hover { text-decoration:underline; }
+  .hldetail { margin-top:8px; }
   .recgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width:820px){ .recgrid { grid-template-columns:1fr; } }
   .recbox { border:1px solid #e1e6eb; border-left:4px solid #ccc; border-radius:10px; padding:13px 15px; cursor:pointer; transition:box-shadow .15s; background:#fff; }
@@ -80,7 +82,23 @@
 /* ===== CONFIG ===== */
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTyt0ji8oiFBRJsXxzDfaamp4PriWgTFzu9TwAyWAAKJTJ2k7I4aCXFrfxombO4Kus0frSzTRNN3LnQ/pub?gid=0&single=true&output=csv';
 
-let PROFS = ['Julie','Troy','Ashley','Patrick','Eugene','Nicole','Elle'];
+// Canonical instructors for attribution + Instructor performance (Julia counts as Julie)
+const INSTRUCTORS = [
+  { name:'Julie', alts:['Julie','Julia'] },
+  { name:'Troy', alts:['Troy'] },
+  { name:'Ashley', alts:['Ashley'] },
+  { name:'Patrick', alts:['Patrick'] },
+  { name:'Eugene', alts:['Eugene'] },
+  { name:'Nicole', alts:['Nicole'] },
+  { name:'Elle', alts:['Elle'] },
+];
+// Professors shown in the brag-sheet section (Julie merges Julie + Julia)
+const BRAG = [
+  { name:'Julie', alts:['Julie','Julia'] },
+  { name:'Troy', alts:['Troy'] },
+  { name:'Ashley', alts:['Ashley'] },
+  { name:'Eugene', alts:['Eugene'] },
+];
 let DATE_FILTER = 'all';
 function escapeReg(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 const PALETTE = ['#ff7a59','#00a4bd','#00bda5','#7c4dff','#f2547d','#516f90','#ffb84d','#0091ae'];
@@ -110,7 +128,7 @@ function parseCSV(text){ if(text.charCodeAt(0)===0xFEFF)text=text.slice(1); cons
 function detectMap(headers){ const lc=headers.map(h=>(h||'').toLowerCase()); const fn=(p)=>{for(const x of p){const i=lc.findIndex(h=>x(h));if(i>=0)return i;}return -1;}; return { survey:fn([h=>h==='survey_name',h=>h==='survey name',h=>h.includes('survey')&&!h.includes('id')&&!h.includes('date')]), date:fn([h=>h.includes('submission'),h=>h.includes('date')]), rating:fn([h=>h==='rating',h=>h.includes('rating'),h=>h.includes('classification'),h=>h.includes('score')]), comment:fn([h=>h==='comment',h=>h.includes('comment'),h=>h.includes('feedback')&&!h.includes('id')]), name:fn([h=>h.includes('email')]) }; }
 function inferScale(v){ const n=v.map(x=>parseFloat(String(x).replace(/[^0-9.\-]/g,''))).filter(x=>!isNaN(x)); if(n.length<v.length*0.5)return{type:'text'}; const mx=Math.max(...n); if(mx<=2)return{type:'num',max:2}; if(mx<=5)return{type:'num',max:5}; return{type:'num',max:10}; }
 function classify(raw,sc){ const s=String(raw||'').trim().toLowerCase(); if(sc.type==='text'||/[a-z]/.test(s.replace(/[^a-z]/g,''))){ if(/(very satisfied|satisfied|promoter|excellent|great|good|positive|happy|highly)/.test(s))return'pos'; if(/(dissatisf|unsatisf|detractor|poor|bad|negative|neutral|passive)/.test(s))return'neg'; return'neu'; } const v=parseFloat(s.replace(/[^0-9.\-]/g,'')); if(isNaN(v))return'neu'; if(sc.max===2)return v>=2?'pos':'neg'; if(sc.max===5)return v>=4?'pos':(v>=3?'neu':'neg'); return v>=9?'pos':(v>=7?'neu':'neg'); }
-function buildRecords(){ RECORDS=[]; if(!FILE)return; const m=FILE.map; const sc=inferScale(FILE.rows.map(r=>m.rating>=0?r[m.rating]:'')); FILE.rows.forEach(r=>{ const comment=m.comment>=0?(r[m.comment]||'').trim():''; const ratingRaw=m.rating>=0?r[m.rating]:''; const dr=m.date>=0?r[m.date]:''; const d=dr?new Date(dr):null; const vd=d&&!isNaN(d.getTime())?d:null; let survey=m.survey>=0?(r[m.survey]||'').trim():''; if(!survey)survey='All responses'; let instructor='Not mentioned'; if(comment){for(const n of PROFS){if(new RegExp('\\b'+escapeReg(n)+'\\b','i').test(comment)){instructor=n;break;}}} RECORDS.push({survey,comment,ratingRaw,sentiment:classify(ratingRaw,sc),date:vd,month:vd?vd.toISOString().slice(0,7):null,instructor}); }); }
+function buildRecords(){ RECORDS=[]; if(!FILE)return; const m=FILE.map; const sc=inferScale(FILE.rows.map(r=>m.rating>=0?r[m.rating]:'')); FILE.rows.forEach(r=>{ const comment=m.comment>=0?(r[m.comment]||'').trim():''; const ratingRaw=m.rating>=0?r[m.rating]:''; const dr=m.date>=0?r[m.date]:''; const d=dr?new Date(dr):null; const vd=d&&!isNaN(d.getTime())?d:null; let survey=m.survey>=0?(r[m.survey]||'').trim():''; if(!survey)survey='All responses'; let instructor='Not mentioned'; if(comment){for(const ins of INSTRUCTORS){if(ins.alts.some(a=>new RegExp('\\b'+escapeReg(a)+'\\b','i').test(comment))){instructor=ins.name;break;}}} RECORDS.push({survey,comment,ratingRaw,sentiment:classify(ratingRaw,sc),date:vd,month:vd?vd.toISOString().slice(0,7):null,instructor}); }); }
 function inDateRange(d,f){ if(!d)return f==='all'; const now=new Date(),y=d.getFullYear(),m=d.getMonth(),ny=now.getFullYear(),nm=now.getMonth(),q=Math.floor(m/3),nq=Math.floor(nm/3); switch(f){case'all':return true;case'this_month':return y===ny&&m===nm;case'last_month':{const lm=new Date(ny,nm-1,1);return y===lm.getFullYear()&&m===lm.getMonth();}case'this_quarter':return y===ny&&q===nq;case'last_quarter':{let ly=ny,lq=nq-1;if(lq<0){lq=3;ly--;}return y===ly&&q===lq;}case'this_year':return y===ny;case'last_year':return y===ny-1;case'last_30':return(now-d)<=30*864e5;case'last_90':return(now-d)<=90*864e5;default:return true;} }
 function applyDateFilter(){ FRECORDS=RECORDS.filter(r=>inDateRange(r.date,DATE_FILTER)); const seen={}; FRECORDS.forEach(r=>{seen[r.survey]=(seen[r.survey]||0)+1;}); SURVEYS=Object.keys(seen).sort((a,b)=>seen[b]-seen[a]); }
 function surveyColor(s){ const i=SURVEYS.indexOf(s); return PALETTE[i%PALETTE.length]; }
@@ -160,9 +178,31 @@ function renderTrendChart(){ const m=monthsAgg(); if(!m.length)return; charts.tr
 function renderInstructors(){ const map={}; FRECORDS.forEach(d=>{map[d.instructor]=map[d.instructor]||{pos:0,total:0};map[d.instructor].total++;if(d.sentiment==='pos')map[d.instructor].pos++;}); const rows=Object.keys(map).map(k=>({name:k,...map[k],pct:map[k].total?Math.round(map[k].pos/map[k].total*100):0})).sort((a,b)=>b.total-a.total); const max=Math.max(...rows.map(r=>r.total),1); document.getElementById('instructors').innerHTML=rows.map(r=>'<div class="bar-row"><div class="name">'+escapeHtml(r.name)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(r.total/max*100)+'%"></div></div><div class="num">'+r.total+' resp · '+r.pct+'%</div></div>').join(''); const sel=document.getElementById('fInst'); rows.forEach(r=>{if(r.name==='Not mentioned')return;const o=document.createElement('option');o.value=r.name;o.textContent=r.name;sel.appendChild(o);}); }
 function computeThemes(){ return THEMES.map(t=>{let pos=0,neg=0,total=0;FRECORDS.forEach(d=>{if(!d.comment)return;const c=d.comment.toLowerCase();if(t.kw.some(k=>c.includes(k))){total++;if(d.sentiment==='pos')pos++;if(d.sentiment==='neg')neg++;}});return{key:t.key,total,pos,neg};}).filter(t=>t.total>0); }
 function renderThemes(){ const out=computeThemes().sort((a,b)=>b.total-a.total); const max=Math.max(...out.map(t=>t.total),1); document.getElementById('themes').innerHTML=out.map(t=>{const neg=t.neg>t.pos*0.4;return'<div class="bar-row"><div class="name">'+t.key+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(t.total/max*100)+'%;background:'+(neg?'#e74c3c':'#ff7a59')+'"></div></div><div class="num">'+t.total+' mentions</div></div>';}).join('')||'<span class="muted">No themes detected.</span>'; }
-function renderHighlightsFallback(){ const good=document.getElementById('hlGood'),bad=document.getElementById('hlBad'),th=computeThemes(); const w=th.filter(t=>t.pos>=t.neg).sort((a,b)=>b.pos-a.pos).slice(0,5).map(t=>t.key+' — praised in '+t.pos+' comment'+(t.pos!==1?'s':'')); const im=th.filter(t=>t.neg>0).sort((a,b)=>b.neg-a.neg).slice(0,5).map(t=>t.key+' — flagged in '+t.neg+' comment'+(t.neg!==1?'s':'')); good.innerHTML=w.length?w.map(x=>'<li>'+escapeHtml(x)+'</li>').join(''):'<li class="muted">No clear positive themes yet.</li>'; bad.innerHTML=im.length?im.map(x=>'<li>'+escapeHtml(x)+'</li>').join(''):'<li class="muted">No clear improvement areas yet.</li>'; }
-function renderDetractorsPraises(){ const det=FRECORDS.filter(d=>d.sentiment==='neg'&&d.comment).slice(0,8); const pra=FRECORDS.filter(d=>d.sentiment==='pos'&&d.comment).slice(0,6); document.getElementById('detractors').innerHTML=det.length?det.map(d=>'<div class="quote detractor">“'+escapeHtml(trim(d.comment,260))+'”<div class="meta">'+escapeHtml(d.survey)+(d.date?' · '+fmtDate(d.date):'')+(d.instructor!=='Not mentioned'?' · '+d.instructor:'')+'</div></div>').join(''):'<span class="muted">No lower-rated comments in this range. 🎉</span>'; document.getElementById('praises').innerHTML=pra.map(d=>'<div class="quote">“'+escapeHtml(trim(d.comment,220))+'”<div class="meta">'+escapeHtml(d.survey)+(d.date?' · '+fmtDate(d.date):'')+(d.instructor!=='Not mentioned'?' · '+d.instructor:'')+'</div></div>').join(''); }
-function profData(){ return PROFS.map(name=>{const rx=new RegExp('\\b'+escapeReg(name)+'\\b','i');return{name,hits:FRECORDS.filter(d=>d.comment&&rx.test(d.comment))};}).filter(b=>b.hits.length>0).sort((a,b)=>b.hits.length-a.hits.length); }
+function themeComments(key,kind){ const t=THEMES.find(x=>x.key===key); if(!t)return[]; return FRECORDS.filter(d=>{if(!d.comment||d.sentiment!==kind)return false;const c=d.comment.toLowerCase();return t.kw.some(k=>c.includes(k));}); }
+function hlItem(key,kind,n){ return '<li>'+escapeHtml(key)+' — <span class="hltoggle" data-key="'+escapeHtml(key)+'" data-kind="'+kind+'">'+(kind==='pos'?'praised':'flagged')+' in '+n+' comment'+(n!==1?'s':'')+' ▸</span><div class="hldetail" style="display:none"></div></li>'; }
+function renderHighlightsFallback(){
+  const good=document.getElementById('hlGood'),bad=document.getElementById('hlBad'),th=computeThemes();
+  const w=th.filter(t=>t.pos>=t.neg).sort((a,b)=>b.pos-a.pos).slice(0,5);
+  const im=th.filter(t=>t.neg>0).sort((a,b)=>b.neg-a.neg).slice(0,5);
+  good.innerHTML=w.length?w.map(t=>hlItem(t.key,'pos',t.pos)).join(''):'<li class="muted">No clear positive themes yet.</li>';
+  bad.innerHTML=im.length?im.map(t=>hlItem(t.key,'neg',t.neg)).join(''):'<li class="muted">No clear improvement areas yet.</li>';
+  [good,bad].forEach(ul=>ul.querySelectorAll('.hltoggle').forEach(sp=>sp.addEventListener('click',()=>{
+    const li=sp.closest('li'),det=li.querySelector('.hldetail');
+    if(det.style.display==='block'){det.style.display='none';return;}
+    const cs=themeComments(sp.dataset.key,sp.dataset.kind);
+    det.innerHTML=cs.length?cs.map(quoteHtml).join(''):'<span class="muted">No matching comments.</span>';
+    det.style.display='block';
+  })));
+}
+const PRAISE_KW=['amazing','fantastic','excellent','incredible','best','wonderful','love','highly recommend','exceptional','outstanding','brilliant','superb','great','terrific','priceless','knowledgeable','patient','engaging','energy','clear','fun'];
+function praiseScore(c){ const lc=c.toLowerCase(); let s=Math.min(c.length/100,4); PRAISE_KW.forEach(k=>{if(lc.includes(k))s+=1.5;}); return s; }
+function renderDetractorsPraises(){
+  const det=FRECORDS.filter(d=>d.sentiment==='neg'&&d.comment).slice(0,8);
+  const pra=FRECORDS.filter(d=>d.sentiment==='pos'&&d.comment&&d.comment.length>40).slice().sort((a,b)=>praiseScore(b.comment)-praiseScore(a.comment)).slice(0,6);
+  document.getElementById('detractors').innerHTML=det.length?det.map(d=>'<div class="quote detractor">“'+escapeHtml(trim(d.comment,260))+'”<div class="meta">'+escapeHtml(d.survey)+(d.date?' · '+fmtDate(d.date):'')+(d.instructor!=='Not mentioned'?' · '+d.instructor:'')+'</div></div>').join(''):'<span class="muted">No lower-rated comments in this range. 🎉</span>';
+  document.getElementById('praises').innerHTML=pra.length?pra.map(d=>'<div class="quote">“'+escapeHtml(trim(d.comment,260))+'”<div class="meta">'+escapeHtml(d.survey)+(d.date?' · '+fmtDate(d.date):'')+(d.instructor!=='Not mentioned'?' · '+d.instructor:'')+'</div></div>').join(''):'<span class="muted">No detailed praise in this range.</span>';
+}
+function profData(){ return BRAG.map(b=>{const rx=new RegExp('\\b('+b.alts.map(escapeReg).join('|')+')\\b','i');return{name:b.name,hits:FRECORDS.filter(d=>d.comment&&rx.test(d.comment))};}).filter(b=>b.hits.length>0).sort((a,b)=>b.hits.length-a.hits.length); }
 function renderBrag(){ const box=document.getElementById('brag'); const blocks=profData(); if(blocks.length){ box.innerHTML='<div class="profgrid">'+blocks.map(b=>{const pos=b.hits.filter(h=>h.sentiment==='pos').length;const pct=Math.round(pos/b.hits.length*100);return'<div class="profbox'+(selectedProf===b.name?' sel':'')+'" data-name="'+escapeHtml(b.name)+'"><div class="pname">'+escapeHtml(b.name)+'</div><div class="pmeta">'+b.hits.length+' mention'+(b.hits.length!==1?'s':'')+' · '+pct+'% positive</div><div class="pbar"><div style="width:'+pct+'%"></div></div></div>';}).join('')+'</div>'; box.querySelectorAll('.profbox').forEach(el=>el.addEventListener('click',()=>{selectedProf=(selectedProf===el.dataset.name)?null:el.dataset.name;box.querySelectorAll('.profbox').forEach(x=>x.classList.toggle('sel',x.dataset.name===selectedProf));renderBragDetail();})); } else { box.innerHTML='<span class="muted">No tracked professor names matched in this range.</span>'; } renderBragDetail(); }
 function renderBragDetail(){ const det=document.getElementById('bragDetail'); if(!det)return; if(!selectedProf){det.innerHTML='<span class="muted" style="font-size:12.5px">Select a professor above to see their comments.</span>';return;} const b=profData().find(x=>x.name===selectedProf); if(!b){det.innerHTML='';return;} const pos=b.hits.filter(h=>h.sentiment==='pos').length;const pct=Math.round(pos/b.hits.length*100); det.innerHTML='<div class="brag-detail-head"><span><strong>'+escapeHtml(b.name)+'</strong> · '+b.hits.length+' mention'+(b.hits.length!==1?'s':'')+' · '+pct+'% positive</span><button class="btn ghost copy" id="copyProf">Copy quotes</button></div>'+b.hits.map(quoteHtml).join(''); document.getElementById('copyProf').addEventListener('click',function(){const text=b.name+' — workshop feedback mentions\n\n'+b.hits.map(h=>'• "'+h.comment+'"  ('+h.survey+(h.date?', '+fmtDate(h.date):'')+')').join('\n');copyText(text,this);}); }
 function copyText(text,btn){ const orig=btn.textContent; const done=()=>{btn.textContent='Copied!';setTimeout(()=>btn.textContent=orig,1500);}; if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>fb());}else fb(); function fb(){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){}document.body.removeChild(ta);} }
